@@ -11,34 +11,11 @@ let testExpectationTimeoutForInverted = 1.0 // How long to wait when we expect t
 
 class IterableActionRunnerTests: XCTestCase {
     func testUrlOpenAction() {
-        let urlString = "https://example.com"
-        let action = IterableAction.action(fromDictionary: ["type": "openUrl", "data": urlString])!
-        let context = IterableActionContext(action: action, source: .push)
-        let urlOpener = MockUrlOpener()
-        let expectation = XCTestExpectation(description: "call UrlHandler")
-        let urlHandler: UrlHandler = { url in
-            XCTAssertEqual(url.absoluteString, urlString)
-            expectation.fulfill()
-            return false
-        }
-        
-        let handled = IterableActionRunner.execute(action: action,
-                                                   context: context,
-                                                   urlHandler: urlHandler,
-                                                   urlOpener: urlOpener)
-        
-        wait(for: [expectation], timeout: testExpectationTimeout)
-        XCTAssertTrue(handled)
-        
-        if #available(iOS 10.0, *) {
-            XCTAssertEqual(urlOpener.ios10OpenedUrl?.absoluteString, urlString)
-            XCTAssertNil(urlOpener.preIos10openedUrl)
-        } else {
-            XCTAssertEqual(urlOpener.preIos10openedUrl?.absoluteString, urlString)
-            XCTAssertNil(urlOpener.ios10OpenedUrl)
-        }
+        validateUrlOpenAction(source: .push)
+        validateUrlOpenAction(source: .inApp)
+        validateUrlOpenAction(source: .universalLink)
     }
-    
+
     func testUrlHandlingOverride() {
         let urlString = "https://example.com"
         let action = IterableAction.action(fromDictionary: ["type": "openUrl", "data": urlString])!
@@ -59,13 +36,7 @@ class IterableActionRunnerTests: XCTestCase {
         wait(for: [expectation], timeout: testExpectationTimeout)
         XCTAssertTrue(handled)
         
-        if #available(iOS 10.0, *) {
-            XCTAssertNil(urlOpener.ios10OpenedUrl)
-            XCTAssertNil(urlOpener.preIos10openedUrl)
-        } else {
-            XCTAssertNil(urlOpener.ios10OpenedUrl)
-            XCTAssertNil(urlOpener.preIos10openedUrl)
-        }
+        XCTAssertNil(urlOpener.openedUrl)
     }
     
     func testCustomAction() {
@@ -170,5 +141,28 @@ class IterableActionRunnerTests: XCTestCase {
                                      allowedProtocols: ["http"])
         
         wait(for: [expectation1], timeout: testExpectationTimeout)
+    }
+    
+    private func validateUrlOpenAction(source: IterableActionSource) {
+        let urlString = "https://example.com"
+        let action = IterableAction.action(fromDictionary: ["type": "openUrl", "data": urlString])!
+        let context = IterableActionContext(action: action, source: source)
+        let urlOpener = MockUrlOpener()
+        let expectation = XCTestExpectation(description: "call UrlHandler")
+        let urlHandler: UrlHandler = { url in
+            XCTAssertEqual(url.absoluteString, urlString)
+            expectation.fulfill()
+            return false
+        }
+        
+        let handled = IterableActionRunner.execute(action: action,
+                                                   context: context,
+                                                   urlHandler: urlHandler,
+                                                   urlOpener: urlOpener)
+        
+        wait(for: [expectation], timeout: testExpectationTimeout)
+        XCTAssertTrue(handled)
+        
+        XCTAssertEqual(urlOpener.openedUrl?.absoluteString, urlString)
     }
 }

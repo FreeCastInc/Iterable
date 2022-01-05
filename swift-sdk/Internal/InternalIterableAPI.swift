@@ -77,7 +77,7 @@ final class InternalIterableAPI: NSObject, PushTrackerProtocol, AuthProvider {
     @discardableResult func handleUniversalLink(_ url: URL) -> Bool {
         let (result, future) = deepLinkManager.handleUniversalLink(url,
                                                                    urlDelegate: config.urlDelegate,
-                                                                   urlOpener: AppUrlOpener(),
+                                                                   urlOpener: urlOpener,
                                                                    allowedProtocols: config.allowedProtocols)
         future.onSuccess { attributionInfo in
             if let attributionInfo = attributionInfo {
@@ -585,9 +585,7 @@ final class InternalIterableAPI: NSObject, PushTrackerProtocol, AuthProvider {
     
     private func handlePendingNotification() {
         if let pendingNotificationResponse = Self.pendingNotificationResponse {
-            if #available(iOS 10.0, *) {
-                IterableAppIntegration.implementation?.userNotificationCenter(nil, didReceive: pendingNotificationResponse, withCompletionHandler: nil)
-            }
+            IterableAppIntegration.implementation?.userNotificationCenter(nil, didReceive: pendingNotificationResponse, withCompletionHandler: nil)
             Self.pendingNotificationResponse = nil
         }
     }

@@ -60,7 +60,7 @@ open class IterableInboxViewController: UITableViewController {
     
     /// We default, we don't show any message when inbox is empty.
     /// If you want to show a message, such as, "There are no messages", you will
-    /// have to set the `noMessagesTitle` and  `noMessagesText` properties below.
+    /// have to set the `noMessagesTitle` and  `noMessagesBody` properties below.
 
     /// Use this to set the title to show when there are no message in the inbox.
     @IBInspectable public var noMessagesTitle: String? = nil
@@ -136,12 +136,10 @@ open class IterableInboxViewController: UITableViewController {
         tableView.rowHeight = UITableView.automaticDimension
         tableView.estimatedRowHeight = UITableView.automaticDimension
         
-        if #available(iOS 10.0, *) {
-            let refreshControl = UIRefreshControl()
-            refreshControl.attributedTitle = NSAttributedString(string: "Fetching new in-app messages")
-            refreshControl.addTarget(self, action: #selector(handleRefreshControl), for: .valueChanged)
-            tableView.refreshControl = refreshControl
-        }
+        let refreshControl = UIRefreshControl()
+        refreshControl.attributedTitle = NSAttributedString(string: "Fetching new in-app messages")
+        refreshControl.addTarget(self, action: #selector(handleRefreshControl), for: .valueChanged)
+        tableView.refreshControl = refreshControl
         
         cellLoader = CellLoader(viewDelegate: viewDelegate, cellNibName: cellNibName)
         cellLoader.registerCells(forTableView: tableView)
@@ -259,7 +257,6 @@ open class IterableInboxViewController: UITableViewController {
         ITBInfo()
     }
     
-    @available(iOS 10.0, *)
     @objc private func handleRefreshControl() {
         ITBInfo()
         
@@ -523,7 +520,7 @@ extension UITableView {
             emptyView.addSubview(titleLabel!)
             titleLabel?.translatesAutoresizingMaskIntoConstraints = false
             titleLabel?.textAlignment = .center
-            titleLabel?.textColor = UIColor.black
+            titleLabel?.textColor = .iterableLabel
             titleLabel?.font = UIFont(name: "HelveticaNeue-Bold", size: 20)
             titleLabel?.text = title
             titleLabel?.widthAnchor.constraint(equalTo: emptyView.widthAnchor, multiplier: 1.0, constant: -20).isActive = true
@@ -537,7 +534,7 @@ extension UITableView {
             let messageLabel = UILabel()
             emptyView.addSubview(messageLabel)
             messageLabel.translatesAutoresizingMaskIntoConstraints = false
-            messageLabel.textColor = UIColor.lightGray
+            messageLabel.textColor = .iterableSecondaryLabel
             messageLabel.font = UIFont(name: "HelveticaNeue-Regular", size: 18)
             messageLabel.text = message
             messageLabel.numberOfLines = 0
