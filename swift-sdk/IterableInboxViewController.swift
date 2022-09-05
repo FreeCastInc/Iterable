@@ -5,6 +5,7 @@
 import UIKit
 
 @IBDesignable
+@objcMembers
 open class IterableInboxViewController: UITableViewController {
     public enum InboxMode {
         case popup
@@ -129,7 +130,7 @@ open class IterableInboxViewController: UITableViewController {
     }
     
     override open func viewDidLoad() {
-        ITBDebug()
+        ITBInfo()
         
         super.viewDidLoad()
         
@@ -146,7 +147,7 @@ open class IterableInboxViewController: UITableViewController {
     }
     
     override open func viewWillAppear(_ animated: Bool) {
-        ITBDebug()
+        ITBInfo()
         
         super.viewWillAppear(animated)
         
@@ -164,7 +165,7 @@ open class IterableInboxViewController: UITableViewController {
     }
     
     override open func viewWillDisappear(_ animated: Bool) {
-        ITBDebug()
+        ITBInfo()
         
         super.viewWillDisappear(animated)
         
@@ -216,14 +217,16 @@ open class IterableInboxViewController: UITableViewController {
     // MARK: - UITableViewDelegate (Optional Functions)
     
     override open func tableView(_ tableView: UITableView, didSelectRowAt indexPath: IndexPath) {
-        if inboxMode == .popup {
+        ITBInfo()
+        let isModal = inboxMode == .popup
+        if isModal {
             tableView.deselectRow(at: indexPath, animated: true)
         }
         
         let message = viewModel.message(atIndexPath: indexPath)
         
-        if let viewController = viewModel.createInboxMessageViewController(for: message, withInboxMode: inboxMode) {
-            viewModel.set(read: true, forMessage: message)
+        if let viewController = viewModel.createInboxMessageViewController(for: message, isModal: isModal) {
+            viewModel.showingMessage(message, isModal: isModal)
             
             if inboxMode == .nav {
                 navigationController?.pushViewController(viewController, animated: true)
@@ -245,7 +248,11 @@ open class IterableInboxViewController: UITableViewController {
     
     // MARK: - IterableInboxViewController-specific Functions and Variables
     
-    var viewModel: InboxViewControllerViewModelProtocol
+    var viewModel: InboxViewControllerViewModelProtocol {
+        didSet {
+            viewModel.view = self
+        }
+    }
     
     /// Set this mode to `popup` to show a popup when an inbox message is selected in the list.
     /// Set this mode to `nav` to push inbox message into navigation stack.

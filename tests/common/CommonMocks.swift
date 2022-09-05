@@ -106,7 +106,7 @@ public class MockPushTracker: NSObject, PushTrackerProtocol {
     public func trackPushOpen(_ userInfo: [AnyHashable: Any],
                               dataFields: [AnyHashable: Any]?,
                               onSuccess: OnSuccessHandler?,
-                              onFailure: OnFailureHandler?) -> Future<SendRequestValue, SendRequestError> {
+                              onFailure: OnFailureHandler?) -> Pending<SendRequestValue, SendRequestError> {
         // save payload
         lastPushPayload = userInfo
         
@@ -123,7 +123,7 @@ public class MockPushTracker: NSObject, PushTrackerProtocol {
                               appAlreadyRunning: Bool,
                               dataFields: [AnyHashable: Any]?,
                               onSuccess: OnSuccessHandler?,
-                              onFailure: OnFailureHandler?) -> Future<SendRequestValue, SendRequestError> {
+                              onFailure: OnFailureHandler?) -> Pending<SendRequestValue, SendRequestError> {
         self.campaignId = campaignId
         self.templateId = templateId
         self.messageId = messageId
@@ -132,7 +132,7 @@ public class MockPushTracker: NSObject, PushTrackerProtocol {
         self.onSuccess = onSuccess
         self.onFailure = onFailure
         
-        return Promise<SendRequestValue, SendRequestError>(value: [:])
+        return Fulfill<SendRequestValue, SendRequestError>(value: [:])
     }
 }
 
@@ -146,143 +146,6 @@ public class MockPushTracker: NSObject, PushTrackerProtocol {
     }
     
     public var applicationState: UIApplication.State
-}
-
-class MockNetworkSession: NetworkSessionProtocol {
-    class MockDataTask: DataTaskProtocol {
-        init(url: URL, completionHandler: @escaping CompletionHandler, parent: MockNetworkSession) {
-            self.url = url
-            self.completionHandler = completionHandler
-            self.parent = parent
-        }
-
-        var state: URLSessionDataTask.State = .suspended
-        
-        func resume() {
-            state = .running
-            parent.makeDataRequest(with: url, completionHandler: completionHandler)
-        }
-        
-        func cancel() {
-            canceled = true
-            state = .completed
-        }
-        
-        private let url: URL
-        private let completionHandler: CompletionHandler
-        private let parent: MockNetworkSession
-        private var canceled = false
-    }
-
-    var urlPatternDataMapping: [String: Data?]?
-    var delay: TimeInterval
-    var requests = [URLRequest]()
-    var callback: ((Data?, URLResponse?, Error?) -> Void)?
-    var requestCallback: ((URLRequest) -> Void)?
-    
-    var statusCode: Int
-    var error: Error?
-    
-    convenience init(statusCode: Int = 200, delay: TimeInterval = 0.0) {
-        self.init(statusCode: statusCode,
-                  data: [:].toJsonData(),
-                  delay: delay,
-                  error: nil)
-    }
-    
-    convenience init(statusCode: Int, json: [AnyHashable: Any], delay: TimeInterval = 0.0, error: Error? = nil) {
-        self.init(statusCode: statusCode,
-                  data: json.toJsonData(),
-                  delay: delay,
-                  error: error)
-    }
-    
-    convenience init(statusCode: Int, data: Data?, delay: TimeInterval = 0.0, error: Error? = nil) {
-        self.init(statusCode: statusCode, urlPatternDataMapping: [".*": data], delay: delay, error: error)
-    }
-    
-    init(statusCode: Int,
-         urlPatternDataMapping: [String: Data?]?,
-         delay: TimeInterval = 0.0,
-         error: Error? = nil) {
-        self.statusCode = statusCode
-        self.urlPatternDataMapping = urlPatternDataMapping
-        self.delay = delay
-        self.error = error
-    }
-    
-    func makeRequest(_ request: URLRequest, completionHandler: @escaping NetworkSessionProtocol.CompletionHandler) {
-        let block = {
-            self.requests.append(request)
-            self.requestCallback?(request)
-            let response = HTTPURLResponse(url: request.url!, statusCode: self.statusCode, httpVersion: "HTTP/1.1", headerFields: [:])
-            let data = self.data(for: request.url?.absoluteString)
-            completionHandler(data, response, self.error)
-            
-            self.callback?(data, response, self.error)
-        }
-
-        if delay == 0 {
-            DispatchQueue.main.async {
-                block()
-            }
-        } else {
-            DispatchQueue.main.asyncAfter(deadline: .now() + delay) {
-                block()
-            }
-        }
-    }
-    
-    func makeDataRequest(with url: URL, completionHandler: @escaping NetworkSessionProtocol.CompletionHandler) {
-        let block = {
-            let response = HTTPURLResponse(url: url, statusCode: self.statusCode, httpVersion: "HTTP/1.1", headerFields: [:])
-            let data = self.data(for: url.absoluteString)
-            completionHandler(data, response, self.error)
-            
-            self.callback?(data, response, self.error)
-        }
-        
-        if delay == 0 {
-            DispatchQueue.main.async {
-                block()
-            }
-        } else {
-            DispatchQueue.main.asyncAfter(deadline: .now() + delay) {
-                block()
-            }
-        }
-    }
-    
-    func createDataTask(with url: URL, completionHandler: @escaping CompletionHandler) -> DataTaskProtocol {
-        MockDataTask(url: url, completionHandler: completionHandler, parent: self)
-    }
-
-    func getRequest(withEndPoint endPoint: String) -> URLRequest? {
-        return requests.first { request in
-            request.url?.absoluteString.contains(endPoint) == true
-        }
-    }
-    
-    static func json(fromData data: Data) -> [AnyHashable: Any] {
-        try! JSONSerialization.jsonObject(with: data, options: []) as! [AnyHashable: Any]
-    }
-    
-    private func data(for urlAbsoluteString: String?) -> Data? {
-        guard let urlAbsoluteString = urlAbsoluteString else {
-            return nil
-        }
-        guard let mapping = urlPatternDataMapping else {
-            return nil
-        }
-        
-        for pattern in mapping.keys {
-            if urlAbsoluteString.range(of: pattern, options: [.regularExpression]) != nil {
-                return mapping[pattern] ?? nil
-            }
-        }
-        
-        return nil
-    }
 }
 
 class NoNetworkNetworkSession: NetworkSessionProtocol {
@@ -321,15 +184,15 @@ class MockInAppFetcher: InAppFetcherProtocol {
         ITBInfo()
     }
     
-    func fetch() -> Future<[IterableInAppMessage], Error> {
+    func fetch() -> Pending<[IterableInAppMessage], Error> {
         ITBInfo()
         
         syncCallback?()
         
-        return Promise(value: messagesMap.values)
+        return Fulfill(value: messagesMap.values)
     }
     
-    @discardableResult func mockMessagesAvailableFromServer(internalApi: InternalIterableAPI?, messages: [IterableInAppMessage]) -> Future<Int, Error> {
+    @discardableResult func mockMessagesAvailableFromServer(internalApi: InternalIterableAPI?, messages: [IterableInAppMessage]) -> Pending<Int, Error> {
         ITBInfo()
         
         messagesMap = OrderedDictionary<String, IterableInAppMessage>()
@@ -338,7 +201,7 @@ class MockInAppFetcher: InAppFetcherProtocol {
             messagesMap[$0.messageId] = $0
         }
         
-        let result = Promise<Int, Error>()
+        let result = Fulfill<Int, Error>()
         
         let inAppManager = internalApi?.inAppManager
         inAppManager?.scheduleSync().onSuccess { [weak inAppManager = inAppManager] _ in
@@ -348,7 +211,7 @@ class MockInAppFetcher: InAppFetcherProtocol {
         return result
     }
     
-    @discardableResult func mockInAppPayloadFromServer(internalApi: InternalIterableAPI?, _ payload: [AnyHashable: Any]) -> Future<Int, Error> {
+    @discardableResult func mockInAppPayloadFromServer(internalApi: InternalIterableAPI?, _ payload: [AnyHashable: Any]) -> Pending<Int, Error> {
         ITBInfo()
         return mockMessagesAvailableFromServer(internalApi: internalApi, messages: InAppTestHelper.inAppMessages(fromPayload: payload))
     }
@@ -366,36 +229,37 @@ class MockInAppFetcher: InAppFetcherProtocol {
 
 class MockInAppDisplayer: InAppDisplayerProtocol {
     // when a message is shown this is called back
-    var onShow: Promise<IterableInAppMessage, IterableError> = Promise<IterableInAppMessage, IterableError>()
+    var onShow: Fulfill<IterableInAppMessage, IterableError> = Fulfill<IterableInAppMessage, IterableError>()
     
     func isShowingInApp() -> Bool {
         showing
     }
     
     // This is not resolved until a url is clicked.
-    func showInApp(message: IterableInAppMessage) -> ShowResult {
+    func showInApp(message: IterableInAppMessage, onClickCallback: ((URL) -> Void)?) -> ShowResult {
         guard showing == false else {
             onShow.reject(with: IterableError.general(description: "showing something else"))
             return .notShown("showing something else")
         }
         
-        result = Promise<URL, IterableError>()
-        
         showing = true
+        self.onClickCallback = onClickCallback
         
         onShow.resolve(with: message)
         
-        return .shown(result)
+        return .shown
     }
     
     // Mimics clicking a url
     func click(url: URL) {
         ITBInfo()
         showing = false
-        result.resolve(with: url)
+        DispatchQueue.main.async { [weak self] in
+            self?.onClickCallback?(url)
+        }
     }
     
-    private var result = Promise<URL, IterableError>()
+    private var onClickCallback: ((URL) -> Void)?
     private var showing = false
 }
 
@@ -542,8 +406,8 @@ class MockWebView: WebViewProtocol {
     
     func layoutSubviews() {}
     
-    func calculateHeight() -> Future<CGFloat, IterableError> {
-        Promise<CGFloat, IterableError>(value: height)
+    func calculateHeight() -> Pending<CGFloat, IterableError> {
+        Fulfill<CGFloat, IterableError>(value: height)
     }
     
     var position: ViewPosition = ViewPosition()
@@ -569,8 +433,6 @@ class MockLocalStorage: LocalStorageProtocol {
     var sdkVersion: String? = nil
     
     var offlineMode: Bool = false
-    
-    var offlineModeBeta: Bool = false
     
     func getAttributionInfo(currentDate: Date) -> IterableAttributionInfo? {
         guard !MockLocalStorage.isExpired(expiration: attributionInfoExpiration, currentDate: currentDate) else {
@@ -615,5 +477,95 @@ class MockLocalStorage: LocalStorageProtocol {
             // no expiration
             return false
         }
+    }
+}
+
+class MockInboxState: InboxStateProtocol {
+    var clickCallback: ((URL?, IterableInAppMessage, String?) -> Void)?
+    
+    var isReady = true
+    
+    var messages = [InboxMessageViewModel]()
+    
+    var totalMessagesCount: Int {
+        messages.count
+    }
+    
+    var unreadMessagesCount: Int {
+        messages.reduce(0) {
+            $1.read ? $0 + 1 : $0
+        }
+    }
+    
+    func sync() -> Pending<Bool, Error> {
+        Fulfill(value: true)
+    }
+    
+    func track(inboxSession: IterableInboxSession) {
+    }
+    
+    func loadImage(forMessageId messageId: String, fromUrl url: URL) -> Pending<Data, Error> {
+        Fulfill(value: Data())
+    }
+    
+    func handleClick(clickedUrl url: URL?, forMessage message: IterableInAppMessage, inboxSessionId: String?) {
+        clickCallback?(url, message, inboxSessionId)
+    }
+    
+    func set(read: Bool, forMessage message: InboxMessageViewModel) {
+    }
+    
+    func remove(message: InboxMessageViewModel, inboxSessionId: String?) {
+    }
+}
+
+extension IterableHtmlMessageViewController.Parameters {
+    static func createForTesting(messageId: String = UUID().uuidString,
+                                 campaignId: NSNumber? = TestHelper.generateIntGuid() as NSNumber) -> IterableHtmlMessageViewController.Parameters {
+        let metadata = IterableInAppMessageMetadata.createForTesting(messageId: messageId, campaignId: campaignId)
+        return IterableHtmlMessageViewController.Parameters(html: "",
+                                                            messageMetadata: metadata,
+                                                            isModal: false)
+    }
+}
+
+extension IterableInAppMessageMetadata {
+    static func createForTesting(messageId: String = UUID().uuidString,
+                                 campaignId: NSNumber? = TestHelper.generateIntGuid() as NSNumber) -> IterableInAppMessageMetadata {
+        IterableInAppMessageMetadata(message: IterableInAppMessage.createForTesting(messageId: messageId, campaignId: campaignId), location: .inApp)
+    }
+}
+
+extension IterableInAppMessage {
+    static func createForTesting(messageId: String = UUID().uuidString,
+                                 campaignId: NSNumber? = TestHelper.generateIntGuid() as NSNumber) -> IterableInAppMessage {
+        IterableInAppMessage(messageId: messageId,
+                             campaignId: campaignId,
+                             content: IterableHtmlInAppContent.createForTesting())
+    }
+}
+
+extension IterableHtmlInAppContent {
+    static func createForTesting() -> IterableHtmlInAppContent {
+        IterableHtmlInAppContent(edgeInsets: .zero, html: "")
+    }
+}
+
+class MockMessageViewControllerEventTracker: MessageViewControllerEventTrackerProtocol {
+    var trackInAppOpenCallback: ((IterableInAppMessage, InAppLocation, String?) -> Void)?
+    var trackInAppCloseCallback: ((IterableInAppMessage, InAppLocation, String?, InAppCloseSource?, String?) -> Void)?
+    var trackInAppClickCallback: ((IterableInAppMessage, InAppLocation, String?, String?) -> Void)?
+
+
+    func trackInAppOpen(_ message: IterableInAppMessage, location: InAppLocation, inboxSessionId: String?) {
+        trackInAppOpenCallback?(message, location, inboxSessionId)
+    }
+
+    func trackInAppClose(_ message: IterableInAppMessage, location: InAppLocation, inboxSessionId: String?, source: InAppCloseSource?, clickedUrl: String?) {
+        trackInAppCloseCallback?(message, location, inboxSessionId, source, clickedUrl)
+    }
+
+    func trackInAppClick(_ message: IterableInAppMessage, location: InAppLocation, inboxSessionId: String?, clickedUrl: String) {
+        trackInAppClickCallback?(message, location, inboxSessionId, clickedUrl)
     }
 }

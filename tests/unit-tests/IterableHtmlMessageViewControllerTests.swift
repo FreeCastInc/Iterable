@@ -142,17 +142,95 @@ class IterableHtmlMessageViewControllerTests: XCTestCase {
         let expectation1 = expectation(description: "checkPositioning")
         let webView = MockWebView(height: inAppHeight)
         
-        let future = IterableHtmlMessageViewController.calculateWebViewPosition(webView: webView,
+        let pending = IterableHtmlMessageViewController.calculateWebViewPosition(webView: webView,
                                                                                 safeAreaInsets: safeAreaInsets,
                                                                                 parentPosition: parentPosition,
                                                                                 paddingLeft: 0,
                                                                                 paddingRight: 0,
                                                                                 location: messageLocation)
-        future.onSuccess { position in
+        pending.onSuccess { position in
             XCTAssertEqual(position, expectedWebViewPosition)
             expectation1.fulfill()
         }
         
         wait(for: [expectation1], timeout: testExpectationTimeout)
     }
+    
+    func testTrackInAppOpen() throws {
+        let expectation1 = expectation(description: #function)
+        let messageId = UUID().uuidString
+        let campaignId = TestHelper.generateIntGuid() as NSNumber
+        let eventTracker = MockMessageViewControllerEventTracker()
+        eventTracker.trackInAppOpenCallback = { (message, _, _) in
+            XCTAssertEqual(message.messageId, messageId)
+            XCTAssertEqual(message.campaignId, campaignId)
+            expectation1.fulfill()
+        }
+        let parameters = IterableHtmlMessageViewController.Parameters.createForTesting(messageId: messageId, campaignId: campaignId)
+        let viewController = IterableHtmlMessageViewController.create(parameters: parameters,
+                                                                      eventTracker: eventTracker,
+                                                                      onClickCallback: nil)
+        viewController.viewDidLoad()
+        wait(for: [expectation1], timeout: testExpectationTimeout)
+    }
+
+    func testTrackInAppClose() throws {
+        let expectation1 = expectation(description: #function)
+        let messageId = UUID().uuidString
+        let campaignId = TestHelper.generateIntGuid() as NSNumber
+        let eventTracker = MockMessageViewControllerEventTracker()
+        eventTracker.trackInAppCloseCallback = { (message, _, _, _, _) in
+            XCTAssertEqual(message.messageId, messageId)
+            XCTAssertEqual(message.campaignId, campaignId)
+            expectation1.fulfill()
+        }
+        let parameters = IterableHtmlMessageViewController.Parameters.createForTesting(messageId: messageId, campaignId: campaignId)
+        let viewController = IterableHtmlMessageViewController.create(parameters: parameters,
+                                                                      eventTracker: eventTracker,
+                                                                      onClickCallback: nil)
+        viewController.viewWillDisappear(true)
+        wait(for: [expectation1], timeout: testExpectationTimeout)
+    }
+
+    func testTrackInAppClick() throws {
+        let expectation1 = expectation(description: #function)
+        let testUrl = URL(string: "https://app.iterable.com")!
+        let messageId = UUID().uuidString
+        let campaignId = TestHelper.generateIntGuid() as NSNumber
+        let eventTracker = MockMessageViewControllerEventTracker()
+        eventTracker.trackInAppClickCallback = { (message, _, _, urlString) in
+            XCTAssertEqual(message.messageId, messageId)
+            XCTAssertEqual(message.campaignId, campaignId)
+            XCTAssertEqual(urlString, testUrl.absoluteString)
+            expectation1.fulfill()
+        }
+        let parameters = IterableHtmlMessageViewController.Parameters.createForTesting(messageId: messageId, campaignId: campaignId)
+        let viewController = IterableHtmlMessageViewController.create(parameters: parameters,
+                                                                      eventTracker: eventTracker,
+                                                                      onClickCallback: nil)
+
+        let testAction = FakeNavigationAction(url: testUrl)
+        let webView = WKWebView()
+        viewController.webView(webView, decidePolicyFor: testAction, decisionHandler: testAction.decisionHandler)
+        wait(for: [expectation1], timeout: testExpectationTimeout)
+    }
+}
+
+final class FakeNavigationAction: WKNavigationAction {
+    let urlRequest: URLRequest
+    
+    var receivedPolicy: WKNavigationActionPolicy?
+    
+    override var request: URLRequest { urlRequest }
+
+    init(urlRequest: URLRequest) {
+        self.urlRequest = urlRequest
+        super.init()
+    }
+    
+    convenience init(url: URL) {
+        self.init(urlRequest: URLRequest(url: url))
+    }
+    
+    func decisionHandler(_ policy: WKNavigationActionPolicy) { self.receivedPolicy = policy }
 }

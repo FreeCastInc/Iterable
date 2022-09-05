@@ -8,7 +8,7 @@ import UIKit
 @objcMembers
 public final class IterableAPI: NSObject {
     /// The current SDK version
-    public static let sdkVersion = "6.4.1"
+    public static let sdkVersion = "6.4.7"
     
     /// The email of the logged in user that this IterableAPI is using
     public static var email: String? {
@@ -122,6 +122,14 @@ public final class IterableAPI: NSObject {
     }
 
     // MARK: - SDK
+    
+    public static func setEmail(_ email: String?, _ authToken: String? = nil) {
+        internalImplementation?.setEmail(email, authToken: authToken)
+    }
+    
+    public static func setUserId(_ userId: String?, _ authToken: String? = nil) {
+        internalImplementation?.setUserId(userId, authToken: authToken)
+    }
     
     /// Handle a Universal Link
     ///
@@ -309,7 +317,7 @@ public final class IterableAPI: NSObject {
     ///
     /// - Parameters:
     ///    - newEmail: The new email of this user
-    ///    - token: The new authentication token for this user
+    ///    - token: The new authentication token for this user, if left out, the SDK will not update the token in any way
     ///    - onSuccess: `OnSuccessHandler` to invoke if update is successful
     ///    - onFailure: `OnFailureHandler` to invoke if update fails
     ///
@@ -321,7 +329,7 @@ public final class IterableAPI: NSObject {
                                    withToken token: String,
                                    onSuccess: OnSuccessHandler?,
                                    onFailure: OnFailureHandler?) {
-        internalImplementation?.updateEmail(newEmail, onSuccess: onSuccess, onFailure: onFailure)
+        internalImplementation?.updateEmail(newEmail, withToken: token, onSuccess: onSuccess, onFailure: onFailure)
     }
     
     /// Tracks what's in the shopping cart (or equivalent) at this point in time
@@ -397,6 +405,36 @@ public final class IterableAPI: NSObject {
                                               onSuccess: onSuccess,
                                               onFailure: onFailure)
     }
+
+    /// Tracks a purchase with additional data and custom completion blocks.
+    ///
+    /// - Parameters:
+    ///     - withTotal: The total purchase amount
+    ///     - items: The list of purchased items
+    ///     - dataFields: A `Dictionary` containing any additional information to save along with the event
+    ///     - campaignId: The `campaignId` of the push notification that caused this open event
+    ///     - templateId: The `templateId` of the push notification that caused this open event
+    ///     - onSuccess: `OnSuccessHandler` to invoke if the purchase is tracked successfully
+    ///     - onFailure: `OnFailureHandler` to invoke if tracking the purchase fails
+    ///
+    /// - SeeAlso: CommerceItem, OnSuccessHandler, OnFailureHandler
+    @objc(trackPurchase:items:dataFields:campaignId:templateId:onSuccess:onFailure:)
+    public static func track(purchase withTotal: NSNumber,
+                             items: [CommerceItem],
+                             dataFields: [AnyHashable: Any]?,
+                             campaignId: NSNumber?,
+                             templateId: NSNumber?,
+                             onSuccess: OnSuccessHandler?,
+                             onFailure: OnFailureHandler?) {
+        internalImplementation?.trackPurchase(withTotal,
+                                              items: items,
+                                              dataFields: dataFields,
+                                              campaignId: campaignId,
+                                              templateId: templateId,
+                                              onSuccess: onSuccess,
+                                              onFailure: onFailure)
+    }
+
     
     /// Tracks a `pushOpen` event with a push notification payload
     ///

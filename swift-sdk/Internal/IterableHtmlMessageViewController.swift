@@ -12,6 +12,47 @@ enum IterableMessageLocation: Int {
     case bottom
 }
 
+protocol MessageViewControllerEventTrackerProtocol {
+    func trackInAppOpen(_ message: IterableInAppMessage,
+                        location: InAppLocation,
+                        inboxSessionId: String?)
+    func trackInAppClose(_ message: IterableInAppMessage,
+                         location: InAppLocation,
+                         inboxSessionId: String?,
+                         source: InAppCloseSource?,
+                         clickedUrl: String?)
+    func trackInAppClick(_ message: IterableInAppMessage,
+                         location: InAppLocation,
+                         inboxSessionId: String?,
+                         clickedUrl: String)
+}
+
+class MessageViewControllerEventTracker: MessageViewControllerEventTrackerProtocol {
+    init(requestHandler: RequestHandlerProtocol?) {
+        self.requestHandler = requestHandler
+    }
+    
+    func trackInAppOpen(_ message: IterableInAppMessage, location: InAppLocation, inboxSessionId: String?) {
+        requestHandler?.trackInAppOpen(message, location: location, inboxSessionId: inboxSessionId, onSuccess: nil, onFailure: nil)
+    }
+    
+    func trackInAppClose(_ message: IterableInAppMessage, location: InAppLocation, inboxSessionId: String?, source: InAppCloseSource?, clickedUrl: String?) {
+        requestHandler?.trackInAppClose(message, location: location, inboxSessionId: inboxSessionId, source: source, clickedUrl: clickedUrl, onSuccess: nil, onFailure: nil)
+    }
+    
+    func trackInAppClick(_ message: IterableInAppMessage, location: InAppLocation, inboxSessionId: String?, clickedUrl: String) {
+        requestHandler?.trackInAppClick(message, location: location, inboxSessionId: inboxSessionId, clickedUrl: clickedUrl, onSuccess: nil, onFailure: nil)
+    }
+    
+    private let requestHandler: RequestHandlerProtocol?
+}
+
+protocol MessageViewControllerDelegate: AnyObject {
+    func messageDidAppear()
+    func messageDidDisappear()
+    func messageDeinitialized()
+}
+
 class IterableHtmlMessageViewController: UIViewController {
     struct Parameters {
         let html: String
@@ -54,25 +95,25 @@ class IterableHtmlMessageViewController: UIViewController {
     
     weak var presenter: InAppPresenter?
     
-    init(parameters: Parameters,
-         internalAPIProvider: @escaping @autoclosure () -> InternalIterableAPI? = IterableAPI.internalImplementation,
-         webViewProvider: @escaping @autoclosure () -> WebViewProtocol = IterableHtmlMessageViewController.createWebView()) {
+    private init(parameters: Parameters,
+                 eventTrackerProvider:  @escaping @autoclosure () -> MessageViewControllerEventTrackerProtocol?,
+                 onClickCallback: ((URL) -> Void)?,
+                 webViewProvider: @escaping @autoclosure () -> WebViewProtocol = IterableHtmlMessageViewController.createWebView(),
+                 delegate: MessageViewControllerDelegate?) {
         ITBInfo()
-        self.internalAPIProvider = internalAPIProvider
+        self.eventTrackerProvider = eventTrackerProvider
         self.webViewProvider = webViewProvider
         self.parameters = parameters
-        futureClickedURL = Promise<URL, IterableError>()
+        self.onClickCallback = onClickCallback
+        self.delegate = delegate
         super.init(nibName: nil, bundle: nil)
     }
     
-    struct CreateResult {
-        let viewController: IterableHtmlMessageViewController
-        let futureClickedURL: Future<URL, IterableError>
-    }
-    
-    static func create(parameters: Parameters) -> CreateResult {
-        let viewController = IterableHtmlMessageViewController(parameters: parameters)
-        return CreateResult(viewController: viewController, futureClickedURL: viewController.futureClickedURL)
+    static func create(parameters: Parameters,
+                       eventTracker: @escaping @autoclosure () -> MessageViewControllerEventTrackerProtocol? = MessageViewControllerEventTracker(requestHandler: IterableAPI.internalImplementation?.requestHandler),
+                       onClickCallback: ((URL) -> Void)?,
+                       delegate: MessageViewControllerDelegate? = nil) -> IterableHtmlMessageViewController {
+        IterableHtmlMessageViewController(parameters: parameters, eventTrackerProvider: eventTracker(), onClickCallback: onClickCallback, delegate: delegate)
     }
     
     override var prefersStatusBarHidden: Bool { parameters.isModal }
@@ -98,11 +139,11 @@ class IterableHtmlMessageViewController: UIViewController {
         
         super.viewDidLoad()
         
-        // Tracks an in-app open and layouts the webview
+        // Tracks an in-app open and lays out the webview
         if let messageMetadata = parameters.messageMetadata {
-            internalAPI?.trackInAppOpen(messageMetadata.message,
-                                        location: messageMetadata.location,
-                                        inboxSessionId: parameters.inboxSessionId)
+            eventTracker?.trackInAppOpen(messageMetadata.message,
+                                         location: messageMetadata.location,
+                                         inboxSessionId: parameters.inboxSessionId)
         }
         
         webView.layoutSubviews()
@@ -114,7 +155,15 @@ class IterableHtmlMessageViewController: UIViewController {
         resizeWebView(animate: false)
     }
     
+    override func viewDidAppear(_ animated: Bool) {
+        ITBInfo()
+        super.viewDidAppear(animated)
+        
+        delegate?.messageDidAppear()
+    }
+    
     override open func viewWillDisappear(_ animated: Bool) {
+        ITBInfo()
         super.viewWillDisappear(animated)
         
         guard let messageMetadata = parameters.messageMetadata else {
@@ -122,18 +171,24 @@ class IterableHtmlMessageViewController: UIViewController {
         }
         
         if let _ = navigationController, linkClicked == false {
-            internalAPI?.trackInAppClose(messageMetadata.message,
+            eventTracker?.trackInAppClose(messageMetadata.message,
                                          location: messageMetadata.location,
                                          inboxSessionId: parameters.inboxSessionId,
                                          source: InAppCloseSource.back,
                                          clickedUrl: nil)
         } else {
-            internalAPI?.trackInAppClose(messageMetadata.message,
+            eventTracker?.trackInAppClose(messageMetadata.message,
                                          location: messageMetadata.location,
                                          inboxSessionId: parameters.inboxSessionId,
                                          source: InAppCloseSource.link,
                                          clickedUrl: clickedLink)
         }
+
+    }
+    
+    override func viewDidDisappear(_ animated: Bool) {
+        ITBInfo()
+        delegate?.messageDidDisappear()
     }
     
     required init?(coder _: NSCoder) {
@@ -142,19 +197,21 @@ class IterableHtmlMessageViewController: UIViewController {
     
     deinit {
         ITBInfo()
+        delegate?.messageDeinitialized()
     }
     
-    private var internalAPIProvider: () -> InternalIterableAPI?
+    private var eventTrackerProvider: () -> MessageViewControllerEventTrackerProtocol?
     private var webViewProvider: () -> WebViewProtocol
     private var parameters: Parameters
-    private let futureClickedURL: Promise<URL, IterableError>
+    private var onClickCallback: ((URL) -> Void)?
+    private var delegate: MessageViewControllerDelegate?
     private var location: IterableMessageLocation = .full
     private var linkClicked = false
     private var clickedLink: String?
     
     private lazy var webView = webViewProvider()
-    private var internalAPI: InternalIterableAPI? {
-        internalAPIProvider()
+    private var eventTracker: MessageViewControllerEventTrackerProtocol? {
+        eventTrackerProvider()
     }
     
     private static func createWebView() -> WebViewProtocol {
@@ -240,9 +297,9 @@ class IterableHtmlMessageViewController: UIViewController {
                                          parentPosition: ViewPosition,
                                          paddingLeft: CGFloat,
                                          paddingRight: CGFloat,
-                                         location: IterableMessageLocation) -> Future<ViewPosition, IterableError> {
+                                         location: IterableMessageLocation) -> Pending<ViewPosition, IterableError> {
         guard location != .full else {
-            return Promise(value: parentPosition)
+            return Fulfill(value: parentPosition)
         }
         
         return webView.calculateHeight().map { height in
@@ -285,9 +342,9 @@ extension IterableHtmlMessageViewController: WKNavigationDelegate {
         linkClicked = true
         clickedLink = destinationUrl
 
-        Self.trackClickOnDismiss(internalAPI: internalAPI,
+        Self.trackClickOnDismiss(eventTracker: eventTracker,
                                  params: parameters,
-                                 futureClickedURL: futureClickedURL,
+                                 onClickCallback: onClickCallback,
                                  withURL: url,
                                  andDestinationURL: destinationUrl)
 
@@ -321,9 +378,9 @@ extension IterableHtmlMessageViewController: WKNavigationDelegate {
         linkClicked = true
         clickedLink = destinationUrl
 
-        Self.trackClickOnDismiss(internalAPI: internalAPI,
+        Self.trackClickOnDismiss(eventTracker: eventTracker,
                                  params: parameters,
-                                 futureClickedURL: futureClickedURL,
+                                 onClickCallback: onClickCallback,
                                  withURL: url,
                                  andDestinationURL: destinationUrl)
 
@@ -332,18 +389,18 @@ extension IterableHtmlMessageViewController: WKNavigationDelegate {
         decisionHandler(.cancel, preferences)
     }
 
-    private static func trackClickOnDismiss(internalAPI: InternalIterableAPI?,
+    private static func trackClickOnDismiss(eventTracker: MessageViewControllerEventTrackerProtocol?,
                                             params: Parameters,
-                                            futureClickedURL: Promise<URL, IterableError>,
+                                            onClickCallback: ((URL) -> Void)?,
                                             withURL url: URL,
                                             andDestinationURL destinationURL: String) {
         ITBInfo()
-        futureClickedURL.resolve(with: url)
+        onClickCallback?(url)
         if let messageMetadata = params.messageMetadata {
-            internalAPI?.trackInAppClick(messageMetadata.message,
-                                         location: messageMetadata.location,
-                                         inboxSessionId: params.inboxSessionId,
-                                         clickedUrl: destinationURL)
+            eventTracker?.trackInAppClick(messageMetadata.message,
+                                          location: messageMetadata.location,
+                                          inboxSessionId: params.inboxSessionId,
+                                          clickedUrl: destinationURL)
         }
     }
 

@@ -2,6 +2,42 @@
 All notable changes to this project will be documented in this file.
 This project adheres to [Semantic Versioning](http://semver.org/).
 
+## 6.4.7
+### Added
+- Added `setEmail` and `setUserId` as publicly accessible functions, which will set the identity of the SDK to attribute to events. The optional second parameter will take in a JWT if you already have one at the time of this call (as opposed to through `IterableAuthDelegate`).
+
+## 6.4.6
+### Fixed
+- Added Objective-C access to `IterableInboxViewController` and `IterableInboxNavigationViewController`
+
+## 6.4.5
+### Added
+- This release makes offline events processing available to all Iterable customers who'd like to use it — just ask your customer success manager to enable it for your account. Offline events processing saves a local copy of events triggered in your app while the device is offline (up to 1000 events). When a connection is re-established and your app is in the foreground, the events will be sent to Iterable. For more information, read [Offline events processing](https://support.iterable.com/hc/articles/360035395671#offline-events-processing).
+
+## 6.4.4
+### Fixed
+- Core data issues.
+
+## 6.4.3
+### Added
+- Retry request on JWT token obtained.
+  
+### Fixed
+- Core data multithreading issue.
+- Update email with JWT token.
+
+
+## 6.4.2
+### Added
+- Added support for apps built using Mac Catalyst.
+​
+### Fixed
+- Fixed a couple of problems related to Swift Package Manager and the creation of release builds and simulator artifacts.
+- Fixed a problem with the SDK’s Carthage integration.
+- Fixed a problem that prevented the SDK from properly tracking inbox sessions when a mobile inbox is displayed in `popup` mode.
+- In-app delete events are now correctly associated with inbox session IDs.
+- Fixed some problems in a script that generates XCFramework binaries.
+
 ## 6.4.1
 ### Fixed
 - Fix archiving issue. There was an issue when archiving for projects with deployment target set to iOS 10. This release fixes the issue.

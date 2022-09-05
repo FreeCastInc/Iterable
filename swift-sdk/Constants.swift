@@ -51,7 +51,6 @@ enum Const {
         static let deviceId = "itbl_device_id"
         static let sdkVersion = "itbl_sdk_version"
         static let offlineMode = "itbl_offline_mode"
-        static let offlineModeBeta = "itbl_offline_mode_beta"
         
         static let payloadExpiration = 24
         static let attributionInfoExpiration = 24
@@ -61,6 +60,8 @@ enum Const {
         static let serviceName = "itbl_keychain"
         
         enum Key {
+            static let email = "itbl_email"
+            static let userId = "itbl_userid"
             static let authToken = "itbl_auth_token"
         }
     }
@@ -77,6 +78,17 @@ enum Const {
     enum ProcessorTypeName {
         static let online = "Online"
         static let offline = "Offline"
+    }
+    
+    enum CookieName {
+        static let campaignId = "iterableEmailCampaignId"
+        static let templateId = "iterableTemplateId"
+        static let messageId = "iterableMessageId"
+    }
+    
+    enum HttpHeader {
+        static let location = "Location"
+        static let setCookie = "Set-Cookie"
     }
 }
 

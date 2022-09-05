@@ -27,46 +27,9 @@ extension NetworkError: LocalizedError {
     }
 }
 
-protocol DataTaskProtocol {
-    var state: URLSessionDataTask.State { get }
-    func resume()
-    func cancel()
-}
-
-extension URLSessionDataTask: DataTaskProtocol {}
-
-protocol NetworkSessionProtocol {
-    typealias CompletionHandler = (Data?, URLResponse?, Error?) -> Void
-    func makeRequest(_ request: URLRequest, completionHandler: @escaping CompletionHandler)
-    func makeDataRequest(with url: URL, completionHandler: @escaping CompletionHandler)
-    func createDataTask(with url: URL, completionHandler: @escaping CompletionHandler) -> DataTaskProtocol
-}
-
-extension URLSession: NetworkSessionProtocol {
-    func makeRequest(_ request: URLRequest, completionHandler: @escaping CompletionHandler) {
-        let task = dataTask(with: request) { data, response, error in
-            completionHandler(data, response, error)
-        }
-        
-        task.resume()
-    }
-    
-    func makeDataRequest(with url: URL, completionHandler: @escaping CompletionHandler) {
-        let task = dataTask(with: url) { data, response, error in
-            completionHandler(data, response, error)
-        }
-        
-        task.resume()
-    }
-
-    func createDataTask(with url: URL, completionHandler: @escaping CompletionHandler) -> DataTaskProtocol {
-        dataTask(with: url, completionHandler: completionHandler)
-    }
-}
-
 struct NetworkHelper {
-    static func getData(fromUrl url: URL, usingSession networkSession: NetworkSessionProtocol) -> Future<Data, Error> {
-        let promise = Promise<Data, Error>()
+    static func getData(fromUrl url: URL, usingSession networkSession: NetworkSessionProtocol) -> Pending<Data, Error> {
+        let fulfill = Fulfill<Data, Error>()
         
         networkSession.makeDataRequest(with: url) { data, response, error in
             let result = createDataResultFromNetworkResponse(data: data, response: response, error: error)
@@ -74,21 +37,21 @@ struct NetworkHelper {
             switch result {
             case let .success(value):
                 DispatchQueue.main.async {
-                    promise.resolve(with: value)
+                    fulfill.resolve(with: value)
                 }
             case let .failure(error):
                 DispatchQueue.main.async {
-                    promise.reject(with: error)
+                    fulfill.reject(with: error)
                 }
             }
         }
         
-        return promise
+        return fulfill
     }
     
     static func sendRequest<T>(_ request: URLRequest,
                                converter: @escaping (Data) throws -> T?,
-                               usingSession networkSession: NetworkSessionProtocol) -> Future<T, NetworkError> {
+                               usingSession networkSession: NetworkSessionProtocol) -> Pending<T, NetworkError> {
         #if NETWORK_DEBUG
         let requestId = IterableUtil.generateUUID()
         print()
@@ -109,7 +72,7 @@ struct NetworkHelper {
         print()
         #endif
         
-        let promise = Promise<T, NetworkError>()
+        let fulfill = Fulfill<T, NetworkError>()
         
         networkSession.makeRequest(request) { data, response, error in
             let result = createResultFromNetworkResponse(data: data,
@@ -120,18 +83,20 @@ struct NetworkHelper {
             switch result {
             case let .success(value):
                 #if NETWORK_DEBUG
-                print("request with requestId: \(requestId) successfully sent")
+                print("request with id: \(requestId) successfully sent, response:")
+                print(value)
                 #endif
-                promise.resolve(with: value)
+                fulfill.resolve(with: value)
             case let .failure(error):
                 #if NETWORK_DEBUG
                 print("request with id: \(requestId) errored")
+                print(error)
                 #endif
-                promise.reject(with: error)
+                fulfill.reject(with: error)
             }
         }
         
-        return promise
+        return fulfill
     }
     
     private static func createResultFromNetworkResponse<T>(data: Data?,

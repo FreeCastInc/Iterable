@@ -192,6 +192,8 @@ class RequestHandlerTests: XCTestCase {
             requestHandler.trackPurchase(total,
                                          items: items,
                                          dataFields: dataFields,
+                                         campaignId: nil,
+                                         templateId: nil,
                                          onSuccess: expectations.onSuccess,
                                          onFailure: expectations.onFailure)
         }
@@ -202,7 +204,49 @@ class RequestHandlerTests: XCTestCase {
         
         wait(for: [expectations.successExpectation, expectations.failureExpectation], timeout: testExpectationTimeout)
     }
-    
+
+    func testTrackPurchase2() throws {
+        let total = NSNumber(value: 15.32)
+        let items = [CommerceItem(id: "id1", name: "myCommerceItem", price: 5.1, quantity: 2)]
+        let dataFields = ["var1": "val1", "var2": "val2"]
+        let campaignId: NSNumber = 33
+        let templateId: NSNumber = 55
+        
+        let bodyDict: [String: Any] = [
+            "items": [[
+                "id": items[0].id,
+                "name": items[0].name,
+                "price": items[0].price,
+                "quantity": items[0].quantity,
+            ]],
+            "total": total,
+            "dataFields": dataFields,
+            "campaignId": campaignId,
+            "templateId": templateId,
+            "user": [
+                "email": "user@example.com",
+            ],
+        ]
+        
+        let expectations = createExpectations(description: #function)
+        
+        let requestGenerator = { (requestHandler: RequestHandlerProtocol) in
+            requestHandler.trackPurchase(total,
+                                         items: items,
+                                         dataFields: dataFields,
+                                         campaignId: campaignId,
+                                         templateId: templateId,
+                                         onSuccess: expectations.onSuccess,
+                                         onFailure: expectations.onFailure)
+        }
+        
+        try handleRequestWithSuccessAndFailure(requestGenerator: requestGenerator,
+                                                path: Const.Path.trackPurchase,
+                                                bodyDict: bodyDict)
+        
+        wait(for: [expectations.successExpectation, expectations.failureExpectation], timeout: testExpectationTimeout)
+    }
+
     func testTrackPushOpen() throws {
         let campaignId = 1
         let templateId = 2
@@ -508,6 +552,7 @@ class RequestHandlerTests: XCTestCase {
     
     func testTrackInAppConsume2() throws {
         let messageId = "message_id"
+        let inboxSessionId = UUID().uuidString
         let message = InAppTestHelper.emptyInAppMessage(messageId: messageId)
         let location = InAppLocation.inbox
         let source = InAppDeleteSource.deleteButton
@@ -519,6 +564,7 @@ class RequestHandlerTests: XCTestCase {
                 "saveToInbox": false,
                 "silentInbox": false,
             ],
+            "inboxSessionId": inboxSessionId,
             "deleteAction": "delete-button",
             "deviceInfo": Self.deviceMetadata.asDictionary()!,
         ]
@@ -529,6 +575,7 @@ class RequestHandlerTests: XCTestCase {
             requestHandler.inAppConsume(message: message,
                                         location: location,
                                         source: source,
+                                        inboxSessionId: inboxSessionId,
                                         onSuccess: expectations.onSuccess,
                                         onFailure: expectations.onFailure)
             
@@ -543,6 +590,7 @@ class RequestHandlerTests: XCTestCase {
     
     func testTrackInAppOpen2() throws {
         let messageId = "message_id"
+        let inboxSessionId = UUID().uuidString
         let bodyDict: [String: Any] = [
             "email": "user@example.com",
             "messageId": messageId,
@@ -552,18 +600,19 @@ class RequestHandlerTests: XCTestCase {
                 "saveToInbox": false,
                 "silentInbox": false,
             ],
+            "inboxSessionId": inboxSessionId,
         ]
         
         let expectations = createExpectations(description: #function)
         
-        let requestGenerator = { (requestHandler: RequestHandlerProtocol) -> Future<SendRequestValue, SendRequestError> in
+        let requestGenerator = { (requestHandler: RequestHandlerProtocol) -> Pending<SendRequestValue, SendRequestError> in
             let message = IterableInAppMessage(messageId: messageId,
                                                campaignId: nil,
                                                content: IterableHtmlInAppContent(edgeInsets: .zero, html: ""))
             
             return requestHandler.trackInAppOpen(message,
                                           location: .inApp,
-                                          inboxSessionId: nil,
+                                          inboxSessionId: inboxSessionId,
                                           onSuccess: expectations.onSuccess,
                                           onFailure: expectations.onFailure)
         }
@@ -592,7 +641,7 @@ class RequestHandlerTests: XCTestCase {
         
         let expectations = createExpectations(description: #function)
         
-        let requestGenerator = { (requestHandler: RequestHandlerProtocol) -> Future<SendRequestValue, SendRequestError> in
+        let requestGenerator = { (requestHandler: RequestHandlerProtocol) -> Pending<SendRequestValue, SendRequestError> in
             let message = IterableInAppMessage(messageId: messageId,
                                                campaignId: nil,
                                                content: IterableHtmlInAppContent(edgeInsets: .zero, html: ""))
@@ -614,7 +663,7 @@ class RequestHandlerTests: XCTestCase {
     
     func testDeleteAllTasksOnLogout() throws {
         let localStorage = MockLocalStorage()
-        localStorage.offlineModeBeta = true
+        localStorage.offlineMode = true
         let internalApi = InternalIterableAPI.initializeForTesting(networkSession: MockNetworkSession(),
                                                                    localStorage: localStorage)
         internalApi.email = "user@example.com"
@@ -629,12 +678,17 @@ class RequestHandlerTests: XCTestCase {
 
         internalApi.logoutUser()
         
-        XCTAssertEqual(try persistenceContextProvider.mainQueueContext().findAllTasks().count, 0)
+        let result = TestUtils.tryUntil(attempts: 10) {
+            let count = try! persistenceContextProvider.mainQueueContext().findAllTasks().count
+            return count == 0
+        }
+        
+        XCTAssertTrue(result)
     }
     
     func testGetRemoteConfiguration() throws {
         let expectation1 = expectation(description: #function)
-        let expectedRemoteConfiguration = RemoteConfiguration(offlineMode: false, offlineModeBeta: true)
+        let expectedRemoteConfiguration = RemoteConfiguration(offlineMode: true)
         let data = try JSONEncoder().encode(expectedRemoteConfiguration)
         let notificationCenter = MockNotificationCenter()
         let networkSession = MockNetworkSession(statusCode: 200, data: data)
@@ -795,7 +849,7 @@ class RequestHandlerTests: XCTestCase {
         let expectation1 = expectation(description: "getRemoteConfiguration is called")
         let remoteConfigurationData = """
         {
-            "offlineMode": false,
+            "offlineMode": true,
             "offlineModeBeta": true
         }
         """.data(using: .utf8)!
@@ -836,7 +890,7 @@ class RequestHandlerTests: XCTestCase {
         }
         let localStorage = MockLocalStorage()
         localStorage.email = "user@example.com"
-        localStorage.offlineModeBeta = true
+        localStorage.offlineMode = true
         let internalAPI = InternalIterableAPI.initializeForTesting(networkSession: networkSession, localStorage: localStorage)
         wait(for: [expectation1], timeout: testExpectationTimeout)
 
@@ -864,7 +918,7 @@ class RequestHandlerTests: XCTestCase {
         }
         let localStorage = MockLocalStorage()
         localStorage.email = "user@example.com"
-        localStorage.offlineModeBeta = false
+        localStorage.offlineMode = false
         let internalAPI = InternalIterableAPI.initializeForTesting(networkSession: networkSession, localStorage: localStorage)
         wait(for: [expectation1], timeout: testExpectationTimeout)
 
@@ -881,7 +935,7 @@ class RequestHandlerTests: XCTestCase {
     }
 
     
-    private func handleRequestWithSuccessAndFailure(requestGenerator: (RequestHandlerProtocol) -> Future<SendRequestValue, SendRequestError>,
+    private func handleRequestWithSuccessAndFailure(requestGenerator: (RequestHandlerProtocol) -> Pending<SendRequestValue, SendRequestError>,
                                                      path: String,
                                                      bodyDict: [AnyHashable: Any]) throws {
         
@@ -899,7 +953,7 @@ class RequestHandlerTests: XCTestCase {
                                          bodyDict: bodyDict)
     }
     
-    private func handleOnlineRequestWithSuccess(requestGenerator: (RequestHandlerProtocol) -> Future<SendRequestValue, SendRequestError>,
+    private func handleOnlineRequestWithSuccess(requestGenerator: (RequestHandlerProtocol) -> Pending<SendRequestValue, SendRequestError>,
                                                  path: String,
                                                  bodyDict: [AnyHashable: Any]) {
         let notificationCenter = MockNotificationCenter()
@@ -921,7 +975,7 @@ class RequestHandlerTests: XCTestCase {
         wait(for: [expectation1], timeout: testExpectationTimeout)
     }
     
-    private func handleOnlineRequestWithFailure(requestGenerator: (RequestHandlerProtocol) -> Future<SendRequestValue, SendRequestError>,
+    private func handleOnlineRequestWithFailure(requestGenerator: (RequestHandlerProtocol) -> Pending<SendRequestValue, SendRequestError>,
                                                  path: String,
                                                  bodyDict: [AnyHashable: Any]) {
         let notificationCenter = MockNotificationCenter()
@@ -943,7 +997,7 @@ class RequestHandlerTests: XCTestCase {
         wait(for: [expectation1], timeout: testExpectationTimeout)
     }
     
-    private func handleOfflineRequestWithSuccess(requestGenerator: (RequestHandlerProtocol) -> Future<SendRequestValue, SendRequestError>,
+    private func handleOfflineRequestWithSuccess(requestGenerator: (RequestHandlerProtocol) -> Pending<SendRequestValue, SendRequestError>,
                                                   path: String,
                                                   bodyDict: [AnyHashable: Any]) {
         let notificationCenter = MockNotificationCenter()
@@ -958,15 +1012,15 @@ class RequestHandlerTests: XCTestCase {
         let request = { requestGenerator(requestHandler) }
         let expectation1 = expectation(description: #function)
         handleRequestWithSuccess(request: request,
-                                  networkSession: networkSession,
-                                  path: path,
-                                  bodyDict: bodyDict,
-                                  expectation: expectation1)
+                                 networkSession: networkSession,
+                                 path: path,
+                                 bodyDict: bodyDict,
+                                 expectation: expectation1)
         waitForTaskRunner(requestHandler: requestHandler,
                           expectation: expectation1)
     }
     
-    private func handleOfflineRequestWithFailure(requestGenerator: (RequestHandlerProtocol) -> Future<SendRequestValue, SendRequestError>,
+    private func handleOfflineRequestWithFailure(requestGenerator: (RequestHandlerProtocol) -> Pending<SendRequestValue, SendRequestError>,
                                                   path: String,
                                                   bodyDict: [AnyHashable: Any]) {
         let notificationCenter = MockNotificationCenter()
@@ -1031,7 +1085,7 @@ class RequestHandlerTests: XCTestCase {
                               offlineMode: selectOffline)
     }
     
-    private func handleRequestWithSuccess(request: () -> Future<SendRequestValue, SendRequestError>,
+    private func handleRequestWithSuccess(request: () -> Pending<SendRequestValue, SendRequestError>,
                                            networkSession: MockNetworkSession,
                                            path: String,
                                            bodyDict: [AnyHashable: Any],
@@ -1050,7 +1104,7 @@ class RequestHandlerTests: XCTestCase {
         }
     }
     
-    private func handleRequestWithFailure(request: () -> Future<SendRequestValue, SendRequestError>,
+    private func handleRequestWithFailure(request: () -> Pending<SendRequestValue, SendRequestError>,
                                            networkSession: MockNetworkSession,
                                            path: String,
                                            bodyDict: [AnyHashable: Any],
@@ -1116,8 +1170,7 @@ class RequestHandlerTests: XCTestCase {
     private let dateProvider = MockDateProvider()
     
     private lazy var persistenceContextProvider: IterablePersistenceContextProvider = {
-        let provider = CoreDataPersistenceContextProvider(dateProvider: dateProvider,
-                                                          fromBundle: Bundle(for: PersistentContainer.self))!
+        let provider = CoreDataPersistenceContextProvider(dateProvider: dateProvider)!
         return provider
     }()
 }
@@ -1125,5 +1178,17 @@ class RequestHandlerTests: XCTestCase {
 extension RequestHandlerTests: AuthProvider {
     var auth: Auth {
         Auth(userId: nil, email: "user@example.com", authToken: nil)
+    }
+}
+
+fileprivate extension MockNetworkSession {
+    convenience init(statusCode: Int, urlPatternDataMapping: [String: Data?]?) {
+        let mapping = urlPatternDataMapping?.mapValues { data in
+            MockNetworkSession.MockResponse(statusCode: statusCode,
+                                            data: data,
+                                            delay: 0.0,
+                                            error: nil)
+        }
+        self.init(mapping: mapping)
     }
 }

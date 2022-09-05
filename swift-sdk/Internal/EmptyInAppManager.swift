@@ -6,14 +6,11 @@ import Foundation
 import UIKit
 
 class EmptyInAppManager: IterableInternalInAppManagerProtocol {
-    func start() -> Future<Bool, Error> {
-        Promise<Bool, Error>(value: true)
+    func start() -> Pending<Bool, Error> {
+        Fulfill<Bool, Error>(value: true)
     }
     
-    func createInboxMessageViewController(for _: IterableInAppMessage, withInboxMode _: IterableInboxViewController.InboxMode, inboxSessionId _: String? = nil) -> UIViewController? {
-        ITBError("Can't create VC")
-        return nil
-    }
+    func handleClick(clickedUrl _: URL?, forMessage _: IterableInAppMessage, location _: InAppLocation, inboxSessionId _: String?) {}
     
     var isAutoDisplayPaused: Bool {
         get {
@@ -53,8 +50,8 @@ class EmptyInAppManager: IterableInternalInAppManagerProtocol {
         0
     }
     
-    func scheduleSync() -> Future<Bool, Error> {
-        Promise<Bool, Error>(value: true)
+    func scheduleSync() -> Pending<Bool, Error> {
+        Fulfill<Bool, Error>(value: true)
     }
     
     func onInAppRemoved(messageId _: String) {}
@@ -63,7 +60,7 @@ class EmptyInAppManager: IterableInternalInAppManagerProtocol {
         true
     }
     
-    func reset() -> Future<Bool, Error> {
-        Promise<Bool, Error>(value: true)
+    func reset() -> Pending<Bool, Error> {
+        Fulfill<Bool, Error>(value: true)
     }
 }

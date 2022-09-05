@@ -12,9 +12,7 @@ protocol InboxViewControllerViewModelProtocol {
     // Talks to the server and refreshes
     // this works hand in hand with listener.onViewModelChanged.
     // Internal model can't be changed until the view begins update (tableView.beginUpdates()).
-    func refresh() -> Future<Bool, Error>
-    
-    func createInboxMessageViewController(for message: InboxMessageViewModel, withInboxMode inboxMode: IterableInboxViewController.InboxMode) -> UIViewController?
+    func refresh() -> Pending<Bool, Error>
     
     func set(comparator: ((IterableInAppMessage, IterableInAppMessage) -> Bool)?,
              filter: ((IterableInAppMessage) -> Bool)?,
@@ -22,7 +20,9 @@ protocol InboxViewControllerViewModelProtocol {
     
     func isEmpty() -> Bool
     func numRows(in section: Int) -> Int
-    func set(read: Bool, forMessage message: InboxMessageViewModel)
+    func createInboxMessageViewController(for message: InboxMessageViewModel,
+                                          isModal: Bool) -> UIViewController?
+    func showingMessage(_ message: InboxMessageViewModel, isModal: Bool)
     func message(atIndexPath indexPath: IndexPath) -> InboxMessageViewModel
     func remove(atIndexPath indexPath: IndexPath)
     

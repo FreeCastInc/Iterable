@@ -478,8 +478,8 @@ class InAppTests: XCTestCase {
         let iterableDeleteUrl = "iterable://delete"
         let mockInAppDisplayer = MockInAppDisplayer()
         mockInAppDisplayer.onShow.onSuccess { _ in
-            mockInAppDisplayer.click(url: URL(string: iterableDeleteUrl)!)
             expectation1.fulfill()
+            mockInAppDisplayer.click(url: URL(string: iterableDeleteUrl)!)
         }
         
         let config = IterableConfig()
@@ -510,8 +510,13 @@ class InAppTests: XCTestCase {
         mockInAppFetcher.mockInAppPayloadFromServer(internalApi: internalApi, payload)
         
         wait(for: [expectation1], timeout: testExpectationTimeout)
-
-        XCTAssertEqual(internalApi.inAppManager.getMessages().count, 0)
+        
+        let predicate = NSPredicate { (_, _) -> Bool in
+            internalApi.inAppManager.getMessages().count == 0
+        }
+        
+        let expectation2 = expectation(for: predicate, evaluatedWith: nil, handler: nil)
+        wait(for: [expectation2], timeout: testExpectationTimeout)
     }
 
     func testShowInAppWithIterableCustomActionDismiss() {
@@ -723,7 +728,7 @@ class InAppTests: XCTestCase {
         
         let mockInAppDisplayer = MockInAppDisplayer()
         mockInAppDisplayer.onShow.onSuccess { _ in
-            mockInAppDisplayer.click(url: TestInAppPayloadGenerator.getClickedUrl(index: 1)) // need to call so future is resolved
+            mockInAppDisplayer.click(url: TestInAppPayloadGenerator.getClickedUrl(index: 1)) // need to call so pending is resolved
             expectation1.fulfill() // expectation1 should not be fulfilled within timeout (inverted)
             expectation2.fulfill()
         }
@@ -1008,7 +1013,7 @@ class InAppTests: XCTestCase {
             inAppFetcher: mockInAppFetcher
         )
         
-        let appIntegration = IterableAppIntegrationInternal(tracker: internalApi,
+        let appIntegration = InternalIterableAppIntegration(tracker: internalApi,
                                                             urlDelegate: config.urlDelegate,
                                                             customActionDelegate: config.customActionDelegate,
                                                             urlOpener: MockUrlOpener(),
@@ -1048,7 +1053,7 @@ class InAppTests: XCTestCase {
         
         let mockInAppManager = MockInAppManager(expectation: expectation1)
         
-        let appIntegration = IterableAppIntegrationInternal(tracker: MockPushTracker(), inAppNotifiable: mockInAppManager)
+        let appIntegration = InternalIterableAppIntegration(tracker: MockPushTracker(), inAppNotifiable: mockInAppManager)
         appIntegration.application(MockApplicationStateProvider(applicationState: .background), didReceiveRemoteNotification: notification, fetchCompletionHandler: nil)
         
         wait(for: [expectation1], timeout: testExpectationTimeout)
@@ -1090,7 +1095,7 @@ class InAppTests: XCTestCase {
         let config = IterableConfig()
         let internalApi = InternalIterableAPI.initializeForTesting(config: config, notificationCenter: mockNotificationCenter)
         
-        let appIntegrationInternal = IterableAppIntegrationInternal(tracker: internalApi,
+        let appIntegrationInternal = InternalIterableAppIntegration(tracker: internalApi,
                                                                     urlDelegate: config.urlDelegate,
                                                                     customActionDelegate: config.customActionDelegate,
                                                                     urlOpener: MockUrlOpener(),
@@ -1206,8 +1211,6 @@ class InAppTests: XCTestCase {
         let emptyManager = EmptyInAppManager()
         
         _ = emptyManager.start()
-        
-        XCTAssertNil(emptyManager.createInboxMessageViewController(for: getEmptyInAppMessage(), withInboxMode: .nav))
         
         emptyManager.isAutoDisplayPaused = true
         

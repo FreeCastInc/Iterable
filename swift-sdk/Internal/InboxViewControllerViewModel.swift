@@ -14,24 +14,38 @@ enum RowDiff {
     case sectionUpdate(IndexSet)
 }
 
-class InboxViewControllerViewModel: InboxViewControllerViewModelProtocol {
-    init(internalAPIProvider: @escaping @autoclosure () -> InternalIterableAPI? = IterableAPI.internalImplementation) {
+class InboxViewControllerViewModel: NSObject, InboxViewControllerViewModelProtocol {
+    init(input: InboxStateProtocol = InboxState(),
+         notificationCenter: NotificationCenterProtocol = NotificationCenter.default) {
         ITBInfo()
+
+        self.input = input
+        self.notificationCenter = notificationCenter
+        self.sessionManager = InboxSessionManager(inboxState: input)
         
-        self.internalAPIProvider = internalAPIProvider
+        super.init()
         
-        if let _ = internalAPI {
-            sectionedMessages = sortAndFilter(messages: getMessages())
+        if input.isReady {
+            sectionedMessages = sortAndFilter(messages: input.messages)
         }
         
-        NotificationCenter.default.addObserver(self, selector: #selector(onInboxChanged(notification:)), name: .iterableInboxChanged, object: nil)
-        NotificationCenter.default.addObserver(self, selector: #selector(onAppWillEnterForeground(notification:)), name: UIApplication.willEnterForegroundNotification, object: nil)
-        NotificationCenter.default.addObserver(self, selector: #selector(onAppDidEnterBackground(notification:)), name: UIApplication.didEnterBackgroundNotification, object: nil)
+        notificationCenter.addObserver(self,
+                                       selector: #selector(onInboxChanged(notification:)),
+                                       name: .iterableInboxChanged,
+                                       object: nil)
+        notificationCenter.addObserver(self,
+                                       selector: #selector(onAppWillEnterForeground(notification:)),
+                                       name: UIApplication.willEnterForegroundNotification,
+                                       object: nil)
+        notificationCenter.addObserver(self,
+                                       selector: #selector(onAppDidEnterBackground(notification:)),
+                                       name: UIApplication.didEnterBackgroundNotification,
+                                       object: nil)
     }
-    
+
     deinit {
         ITBInfo()
-        NotificationCenter.default.removeObserver(self)
+        notificationCenter.removeObserver(self)
     }
     
     // MARK: - InboxViewControllerViewModelProtocol
@@ -46,12 +60,8 @@ class InboxViewControllerViewModel: InboxViewControllerViewModelProtocol {
         allMessagesInSections().filter { $0.read == false }.count
     }
     
-    func refresh() -> Future<Bool, Error> {
-        internalInAppManager?.scheduleSync() ?? Promise(error: IterableError.general(description: "Did not find inAppManager"))
-    }
-    
-    func createInboxMessageViewController(for message: InboxMessageViewModel, withInboxMode inboxMode: IterableInboxViewController.InboxMode) -> UIViewController? {
-        internalInAppManager?.createInboxMessageViewController(for: message.iterableMessage, withInboxMode: inboxMode, inboxSessionId: sessionManager.sessionStartInfo?.id)
+    func refresh() -> Pending<Bool, Error> {
+        input.sync()
     }
     
     func set(comparator: ((IterableInAppMessage, IterableInAppMessage) -> Bool)?, filter: ((IterableInAppMessage) -> Bool)?, sectionMapper: ((IterableInAppMessage) -> Int)?) {
@@ -71,8 +81,11 @@ class InboxViewControllerViewModel: InboxViewControllerViewModelProtocol {
         sectionedMessages[section].1.count
     }
     
-    func set(read: Bool, forMessage message: InboxMessageViewModel) {
-        internalInAppManager?.set(read: read, forMessage: message.iterableMessage)
+    func showingMessage(_ message: InboxMessageViewModel, isModal: Bool) {
+        input.set(read: true, forMessage: message)
+        sessionManager.showingMessage = true
+        sessionManager.inboxDisappearedWhileShowingMessage = false
+        sessionManager.isModalMessage = isModal
     }
     
     func message(atIndexPath indexPath: IndexPath) -> InboxMessageViewModel {
@@ -83,21 +96,67 @@ class InboxViewControllerViewModel: InboxViewControllerViewModelProtocol {
     
     func remove(atIndexPath indexPath: IndexPath) {
         let message = sectionedMessages[indexPath.section].1[indexPath.row]
-        internalInAppManager?.remove(message: message.iterableMessage,
-                                     location: .inbox,
-                                     source: .inboxSwipe,
-                                     inboxSessionId: sessionManager.sessionStartInfo?.id)
+        input.remove(message: message, inboxSessionId: inboxSessionId)
     }
     
     func viewWillAppear() {
         ITBInfo()
-        startSession()
+        if !sessionManager.isTracking {
+            ITBInfo("Starting new session")
+            startSession()
+        }
     }
     
     func viewWillDisappear() {
         ITBInfo()
-        endSession()
+        guard sessionManager.isTracking else {
+            ITBInfo("No session present")
+            return
+        }
+        
+        if sessionManager.showingMessage {
+            ITBInfo("Currently showing a message")
+            if sessionManager.inboxDisappearedWhileShowingMessage {
+                ITBInfo("View disappearing after message is already shown, ending session")
+                endSession()
+            } else {
+                ITBInfo("View disappearing when showing message")
+                sessionManager.inboxDisappearedWhileShowingMessage = true
+            }
+        } else {
+            ITBInfo("Not showing a message, ending session")
+            endSession()
+        }
     }
+    
+    func createInboxMessageViewController(for message: InboxMessageViewModel,
+                                          isModal: Bool) -> UIViewController? {
+        let iterableMessage = message.iterableMessage
+        guard let content = iterableMessage.content as? IterableHtmlInAppContent else {
+            ITBError("Invalid Content in message")
+            return nil
+        }
+        
+        let onClickCallback: (URL) -> Void =  { [weak self] url in
+            ITBInfo()
+            
+            // in addition perform action or url delegate task
+            self?.input.handleClick(clickedUrl: url, forMessage: iterableMessage, inboxSessionId: self?.inboxSessionId)
+        }
+        let parameters = IterableHtmlMessageViewController.Parameters(html: content.html,
+                                                                      padding: content.padding,
+                                                                      messageMetadata: IterableInAppMessageMetadata(message: iterableMessage, location: .inbox),
+                                                                      isModal: isModal,
+                                                                      inboxSessionId: inboxSessionId)
+        let viewController = IterableHtmlMessageViewController.create(parameters: parameters,
+                                                                      onClickCallback: onClickCallback,
+                                                                      delegate: self)
+        
+        viewController.navigationItem.title = iterableMessage.inboxMetadata?.title
+        
+        return viewController
+    }
+
     
     func visibleRowsChanged() {
         ITBDebug()
@@ -134,12 +193,10 @@ class InboxViewControllerViewModel: InboxViewControllerViewModelProtocol {
     }
     
     private func loadImage(forMessageId messageId: String, fromUrl url: URL) {
-        if let networkSession = internalAPI?.dependencyContainer.networkSession {
-            NetworkHelper.getData(fromUrl: url, usingSession: networkSession).onSuccess { [weak self] in
-                self?.setImageData($0, forMessageId: messageId)
-            }.onError {
-                ITBError($0.localizedDescription)
-            }
+        input.loadImage(forMessageId: messageId, fromUrl: url).onSuccess { [weak self] in
+            self?.setImageData($0, forMessageId: messageId)
+        }.onError {
+            ITBError($0.localizedDescription)
         }
     }
     
@@ -191,6 +248,7 @@ class InboxViewControllerViewModel: InboxViewControllerViewModelProtocol {
     }
     
     private func endSession() {
+        ITBInfo()
         guard let sessionInfo = sessionManager.endSession() else {
             ITBError("Could not find session info")
             return
@@ -201,11 +259,11 @@ class InboxViewControllerViewModel: InboxViewControllerViewModelProtocol {
                                                 sessionEndTime: Date(),
                                                 startTotalMessageCount: sessionInfo.startInfo.totalMessageCount,
                                                 startUnreadMessageCount: sessionInfo.startInfo.unreadMessageCount,
-                                                endTotalMessageCount: internalInAppManager?.getInboxMessages().count ?? 0,
-                                                endUnreadMessageCount: internalInAppManager?.getUnreadInboxMessagesCount() ?? 0,
+                                                endTotalMessageCount: input.totalMessagesCount,
+                                                endUnreadMessageCount: input.unreadMessagesCount,
                                                 impressions: sessionInfo.impressions.map { $0.toIterableInboxImpression() })
         
-        internalAPI?.track(inboxSession: inboxSession)
+        input.track(inboxSession: inboxSession)
     }
     
     @objc private func onInboxChanged(notification _: NSNotification) {
@@ -218,7 +276,7 @@ class InboxViewControllerViewModel: InboxViewControllerViewModelProtocol {
     
     private func updateView() {
         ITBInfo()
-        newSectionedMessages = sortAndFilter(messages: getMessages())
+        newSectionedMessages = sortAndFilter(messages: input.messages)
         
         let dwifftDiffs = Dwifft.diff(lhs: sectionedMessages, rhs: newSectionedMessages)
         if dwifftDiffs.count > 0 {
@@ -283,10 +341,6 @@ class InboxViewControllerViewModel: InboxViewControllerViewModelProtocol {
         }
     }
     
-    private func getMessages() -> [InboxMessageViewModel] {
-        internalAPI?.inAppManager.getInboxMessages().map { InboxMessageViewModel(message: $0) } ?? []
-    }
-    
     private func sortAndFilter(messages: [InboxMessageViewModel]) -> SectionedValues<Int, InboxMessageViewModel> {
         SectionedValues(values: filteredMessages(messages: messages),
                         valueToSection: createSectionMapper(),
@@ -322,21 +376,67 @@ class InboxViewControllerViewModel: InboxViewControllerViewModelProtocol {
         sectionedMessages.values
     }
     
-    private var internalAPI: InternalIterableAPI? {
-        internalAPIProvider()
-    }
-    
     var comparator: ((IterableInAppMessage, IterableInAppMessage) -> Bool)?
     var filter: ((IterableInAppMessage) -> Bool)?
     var sectionMapper: ((IterableInAppMessage) -> Int)?
+
+    private let input: InboxStateProtocol
+    private let notificationCenter: NotificationCenterProtocol
     
     private var sectionedMessages = SectionedValues<Int, InboxMessageViewModel>()
     private var newSectionedMessages = SectionedValues<Int, InboxMessageViewModel>()
-    private var sessionManager = InboxSessionManager()
-    private var internalAPIProvider: () -> InternalIterableAPI?
+    private var sessionManager: InboxSessionManager
+    private var inboxSessionId: String? {
+        sessionManager.sessionStartInfo?.id
+    }
+    private let endSessionTimeout: TimeInterval = 0.5
+    private var messageTimer: Timer?
+}
+
+extension InboxViewControllerViewModel: MessageViewControllerDelegate {
+    func messageDidAppear() {
+        ITBInfo()
+        guard !sessionManager.isModalMessage else {
+            ITBInfo("Modal message, returning")
+            return
+        }
+
+        if !sessionManager.isTracking {
+            ITBInfo("Starting a new session when navigating to Inbox")
+            startSession()
+        }
+    }
     
-    private var internalInAppManager: IterableInternalInAppManagerProtocol? {
-        internalAPI?.inAppManager
+    func messageDidDisappear() {
+        ITBInfo()
+        guard !sessionManager.isModalMessage else {
+            ITBInfo("Modal message, returning")
+            return
+        }
+        
+        messageTimer?.invalidate()
+        messageTimer = nil
+        messageTimer = Timer.scheduledTimer(withTimeInterval: endSessionTimeout, repeats: false) { [weak self] _ in
+            self?.endSessionOnNavigate()
+        }
+    }
+    
+    func messageDeinitialized() {
+        ITBInfo()
+        sessionManager.showingMessage = false
+
+        if !sessionManager.isModalMessage {
+            ITBInfo("Non modal message, deinitialized, invalidating timer")
+            messageTimer?.invalidate()
+            messageTimer = nil
+        }
+    }
+    
+    @objc private func endSessionOnNavigate() {
+        ITBInfo()
+        if sessionManager.isTracking {
+            endSession()
+        }
     }
 }
 

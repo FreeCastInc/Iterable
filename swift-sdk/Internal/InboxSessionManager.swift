@@ -24,9 +24,17 @@ public class InboxSessionManager {
     var isTracking: Bool {
         sessionStartInfo != nil
     }
+    var showingMessage = false
+    var inboxDisappearedWhileShowingMessage = false
+    var isModalMessage = false
     
-    public init(provideInAppManager: @escaping @autoclosure () -> IterableInAppManagerProtocol = IterableAPI.inAppManager) {
-        self.provideInAppManager = provideInAppManager
+    init(inboxState: InboxStateProtocol = InboxState()) {
+        self.inboxState = inboxState
+    }
+    
+    // used for the RN SDK iOS side binding
+    public init() {
+        self.inboxState = InboxState()
     }
     
     public func updateVisibleRows(visibleRows: [InboxImpressionTracker.RowInfo]) {
@@ -50,8 +58,8 @@ public class InboxSessionManager {
         
         sessionStartInfo = SessionStartInfo(id: IterableUtil.generateUUID(),
                                             startTime: Date(),
-                                            totalMessageCount: provideInAppManager().getInboxMessages().count,
-                                            unreadMessageCount: provideInAppManager().getUnreadInboxMessagesCount())
+                                            totalMessageCount: inboxState.totalMessagesCount,
+                                            unreadMessageCount: inboxState.unreadMessagesCount)
         impressionTracker = InboxImpressionTracker()
         updateVisibleRows(visibleRows: visibleRows)
     }
@@ -71,5 +79,5 @@ public class InboxSessionManager {
         return sessionInfo
     }
     
-    private let provideInAppManager: () -> IterableInAppManagerProtocol
+    private let inboxState: InboxStateProtocol
 }
