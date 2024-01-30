@@ -365,6 +365,20 @@ protocol InAppPersistenceProtocol {
     func clear()
 }
 
+class InAppInMemoryPersister: InAppPersistenceProtocol {
+    func getMessages() -> [IterableInAppMessage] {
+        []
+    }
+    
+    func persist(_ messages: [IterableInAppMessage]) {
+        return
+    }
+    
+    func clear() {
+        return
+    }
+}
+
 class InAppFilePersister: InAppPersistenceProtocol {
     init(filename: String = "itbl_inapp", ext: String = "json") {
         self.filename = filename
@@ -397,7 +411,7 @@ class InAppFilePersister: InAppPersistenceProtocol {
 
 struct FileHelper {
     static func getUrl(filename: String, ext: String) -> URL? {
-        guard let dir = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first else {
+        guard let dir = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first else {
             return nil
         }
         

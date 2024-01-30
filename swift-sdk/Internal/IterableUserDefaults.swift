@@ -10,6 +10,7 @@ class IterableUserDefaults {
         self.userDefaults = userDefaults
     }
     
+    // migrated to IterableKeychain
     var userId: String? {
         get {
             string(withKey: .userId)
@@ -18,6 +19,7 @@ class IterableUserDefaults {
         }
     }
     
+    // migrated to IterableKeychain
     var email: String? {
         get {
             string(withKey: .email)
@@ -26,6 +28,7 @@ class IterableUserDefaults {
         }
     }
     
+    // migrated to IterableKeychain
     var authToken: String? {
         get {
             string(withKey: .authToken)
@@ -34,6 +37,7 @@ class IterableUserDefaults {
         }
     }
     
+    // deprecated, not in use anymore
     var ddlChecked: Bool {
         get {
             bool(withKey: .ddlChecked)
@@ -74,12 +78,11 @@ class IterableUserDefaults {
         try? save(codable: attributionInfo, withKey: .attributionInfo, andExpiration: expiration)
     }
     
-    func getPayload(currentDate: Date) -> [AnyHashable: Any]? {
-        (try? dict(withKey: .payload, currentDate: currentDate)) ?? nil
-    }
     
-    func save(payload: [AnyHashable: Any]?, withExpiration expiration: Date?) {
-        try? save(dict: payload, withKey: .payload, andExpiration: expiration)
+    // MARK: data migration functions
+    
+    func getAuthDataForMigration() -> (email: String?, userId: String?, authToken: String?) {
+        return (email: email, userId: userId, authToken: authToken)
     }
     
     // MARK: Private implementation
@@ -185,8 +188,6 @@ class IterableUserDefaults {
         private init(value: String) {
             self.value = value
         }
-        
-        static let payload = UserDefaultsKey(value: Const.UserDefault.payloadKey)
         static let attributionInfo = UserDefaultsKey(value: Const.UserDefault.attributionInfoKey)
         static let email = UserDefaultsKey(value: Const.UserDefault.emailKey)
         static let userId = UserDefaultsKey(value: Const.UserDefault.userIdKey)
