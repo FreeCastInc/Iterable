@@ -495,6 +495,11 @@ class IterableAPITests: XCTestCase {
             TestUtils.validateMatch(keyPath: KeyPath(string: "device.dataFields.reactNativeSDKVersion"), value: "x.xx.xxx", inDictionary: body)
             TestUtils.validateNil(keyPath: KeyPath(string: "device.dataFields.\(attributeToAddAndRemove)"), inDictionary: body)
             
+            TestUtils.validateMatch(keyPath: KeyPath(string: "device.dataFields.mobileFrameworkInfo.frameworkType"), value: "native", inDictionary: body)
+
+            
+            TestUtils.validateMatch(keyPath: KeyPath(string: "device.dataFields.mobileFrameworkInfo.iterableSdkVersion"), value:  IterableAPI.sdkVersion, inDictionary: body)
+            
             expectation.fulfill()
         }) { reason, _ in
             // failure
@@ -1083,14 +1088,14 @@ class IterableAPITests: XCTestCase {
                 "messageId": "messageId",
                 "defaultAction": [
                     "type": "openUrl",
-                    "data": "http://somewhere.com",
+                    "data": "https://somewhere.com",
                 ],
             ] as [String : Any],
         ]
         let launchOptions: [UIApplication.LaunchOptionsKey: Any] = [UIApplication.LaunchOptionsKey.remoteNotification: userInfo]
         let urlDelegate = MockUrlDelegate(returnValue: true)
         urlDelegate.callback = { url, _ in
-            XCTAssertEqual(url.absoluteString, "http://somewhere.com")
+            XCTAssertEqual(url.absoluteString, "https://somewhere.com")
             expectation1.fulfill()
         }
         let config = IterableConfig()
@@ -1113,7 +1118,7 @@ class IterableAPITests: XCTestCase {
                 "isGhostPush": false,
                 "defaultAction": [
                     "type": "openUrl",
-                    "data": "http://somewhere.com",
+                    "data": "https://somewhere.com",
                 ],
             ] as [String : Any],
         ]
@@ -1310,4 +1315,5 @@ class IterableAPITests: XCTestCase {
         XCTAssertEqual(localStorage.authToken, authToken)
         userDefaults.removePersistentDomain(forName: "upgrade.test")
     }
+
 }

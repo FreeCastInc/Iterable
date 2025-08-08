@@ -2,6 +2,47 @@
 
 All notable changes to this project will be documented in this file.
 This project adheres to [Semantic Versioning](http://semver.org/).
+## [Unreleased]
+
+## [6.5.13]
+- Fixed in-app messages displaying in wrong window when using Stage Manager or multi-window scenarios on iPad.
+- Fixed redirect handling issue with deep links that was preventing proper URL following.
+- Improved action runner logic to properly validate allowed protocols before processing URL actions, ensuring better security and reliability.
+
+## [6.5.12]
+- Made `IterableDataRegion` an `@objc` class for better Objective-C compatibility.
+- Improved robustness of the SDK by adding more internal initialization checks before executing certain operations.
+- Enhanced thread safety for embedded message data handling, leading to increased stability.
+- Improved `IterableEmbeddedView` by making `imgView` and `cardImageView` optional, leading to more robust view handling, particularly for `.card` and `.banner` types when images might not be present.
+- Minor refinements to authentication and token refresh logic for increased stability.
+
+## [6.5.11]
+### Fixed
+- Added missing constructor for `IterableAPIMobileFrameworkInfo`
+
+## [6.5.10]
+### Added
+- Added `mobileFrameworkInfo` configuration option to `IterableConfig` to identify the mobile framework (Flutter, React Native, or Native) being used with the SDK.
+### Fixed
+- Fixed notification tracking bug that prevents SDK from receiving push notifications when system notification settings are turned off.
+
+## [6.5.9]
+### Added
+- Support for JSON-only in-app messages, JSON-only messages are now handled by the onNewInApp handler and consumed after retrieval
+- Enhanced notification state tracking to align with system notification permissions changes
+
+### Changed
+- reorganized files and updated documentation url in podspec
+
+## [6.5.8]
+### Fixed
+- Fixed incorrect tracking of pushOpen for push notifications with Wake App enabled. Tracking now happens only when users tap to open the app.
+- Fixed the default `notificationsEnabled` value returned when `autoPushRegistration` is set to `false`.
+
+### Changed
+- Updated repository name on Fastline script and podspec files.
+- Comments out outdated tests that need to be revisited.
+- Updated sample app to use generic URLs.
 
 ## [6.5.7]
 ### Fixed

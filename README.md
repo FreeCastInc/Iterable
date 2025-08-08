@@ -6,6 +6,7 @@
 [![pod](https://img.shields.io/cocoapods/v/Iterable-iOS-SDK)](https://cocoapods.org/pods/Iterable-iOS-SDK)
 [![Carthage compatible](https://img.shields.io/badge/Carthage-compatible-4BC51D.svg?style=flat)](https://github.com/Carthage/Carthage)
 
+
 # Iterable's iOS SDK
 
 [Iterable](https://www.iterable.com) is a growth marketing platform that helps
@@ -60,7 +61,6 @@ Release notes:
 Support policies:
 
 - Iterable's [SDK Support Policy](https://support.iterable.com/hc/articles/360046136171)
-- Iterable's [Beta SDK Disclaimer](https://support.iterable.com/hc/articles/360034753412)
 
 Troubleshooting:
 

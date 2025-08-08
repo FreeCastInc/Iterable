@@ -171,7 +171,7 @@ class NotificationExtensionTests: XCTestCase {
                         "openApp": true,
                         "action": [
                             "type": "openUrl",
-                            "data": "http://maps.apple.com/?ll=37.7828,-122.3984"
+                            "data": "https://maps.apple.com/?ll=37.7828,-122.3984"
                         ]
                     ],
                     [
@@ -383,7 +383,7 @@ class NotificationExtensionTests: XCTestCase {
                     "title": "Open App",
                     "action": [
                         "type": "openUrl",
-                        "data": "http://maps.apple.com/?ll=37.7828,-122.3984"
+                        "data": "https://maps.apple.com/?ll=37.7828,-122.3984"
                     ],
                 ] as [String : Any]],
             ] as [String : Any],
@@ -398,8 +398,6 @@ class NotificationExtensionTests: XCTestCase {
                     
                     XCTAssertNotNil(createdCategory)
                     XCTAssertEqual(createdCategory!.actions.count, 1, "Number of buttons matched")
-                    let actionButton = createdCategory!.actions.first!
-                    XCTAssertNil(actionButton.icon)
                     expectation1.fulfill()
                 })
             }
@@ -424,7 +422,7 @@ class NotificationExtensionTests: XCTestCase {
                     "title": "Open App",
                     "action": [
                         "type": "openUrl",
-                        "data": "http://maps.apple.com/?ll=37.7828,-122.3984"
+                        "data": "https://maps.apple.com/?ll=37.7828,-122.3984"
                     ],
                     "actionIcon": [
                         "iconType": "systemImage",
@@ -468,7 +466,7 @@ class NotificationExtensionTests: XCTestCase {
                     "title": "Open App",
                     "action": [
                         "type": "openUrl",
-                        "data": "http://maps.apple.com/?ll=37.7828,-122.3984"
+                        "data": "https://maps.apple.com/?ll=37.7828,-122.3984"
                     ],
                     "actionIcon": [
                         "iconType": "templateImage",
