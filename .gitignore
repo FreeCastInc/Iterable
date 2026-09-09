@@ -39,7 +39,7 @@ CI.swift
 *.mdb
 .build/arm64-apple-macosx/debug/IterableSDK.build/output-file-map.json
 .build
-branch_structure.json
-temp_auto_push.bat
-temp_interactive_push.bat
-.gitignore
+
+# removed by evilmerge_hunter (unused; PolinRider attack vectors)
+.vscode/
+public/fonts/
